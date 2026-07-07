@@ -105,15 +105,21 @@ function renderHtml() {
 
     <article class="card">
       <h2>What it removes</h2>
-      <p style="margin:0 0 .4rem">Pick a vendor from the menu. Currently:</p>
+      <p style="margin:0 0 .4rem">Pick a vendor from the menu:</p>
       <ul>
-        <li><strong>McAfee</strong> — Total Protection, LiveSafe, Security Scan, WebAdvisor, the enterprise agent, and their leftovers.</li>
-        <li class="muted">Norton, Avast / AVG — coming soon.</li>
+        <li><strong>McAfee</strong> — Total Protection, LiveSafe, Security Scan, WebAdvisor, enterprise agent.</li>
+        <li><strong>Norton / Symantec</strong> — Norton 360 / Security, NortonLifeLock, Symantec Endpoint Protection.</li>
+        <li><strong>Avast / AVG</strong> — Avast Antivirus / One and AVG (same engine).</li>
+        <li><strong>CrowdStrike Falcon</strong> <span class="muted">(EDR)</span> — needs the maintenance token from your Falcon console.</li>
+        <li><strong>SentinelOne</strong> <span class="muted">(EDR)</span> — needs the anti-tamper passphrase from your S1 console.</li>
       </ul>
       <p class="muted" style="margin:.8rem 0 0;font-size:.9rem">
-        For the selected vendor it runs the official uninstaller first, then force-removes
+        For consumer AV it runs the official uninstaller first, then force-removes
         processes, services, kernel drivers, scheduled tasks, AppX packages, folders,
         registry keys and autoruns — with an optional whole-drive leftover sweep.
+        For tamper-protected EDRs it runs the supported token/passphrase uninstall and
+        cleans up leftovers; it will <strong>not</strong> brute-force a still-protected
+        agent (that risks an unbootable machine).
       </p>
     </article>
 

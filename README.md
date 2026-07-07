@@ -1,9 +1,10 @@
 # nuke.it2.sh
 
-**Antivirus search & destroy.** An interactive PowerShell menu — in the spirit
-of `get.activated.win` — that force-removes stubborn antivirus bloatware from
-Windows. First target: **McAfee**, because it re-installs itself, self-protects
-its services, and refuses to die quietly.
+**Antivirus / EDR search & destroy.** An interactive PowerShell menu — in the
+spirit of `get.activated.win` — that removes stubborn security agents from
+Windows during offboarding, re-imaging, or a vendor migration. Consumer AV gets
+force-removed; tamper-protected EDRs get the supported token/passphrase
+uninstall plus leftover cleanup.
 
 Part of the [it2.sh](https://it2.sh) family of one-line tools.
 
@@ -30,37 +31,70 @@ A menu. You pick a vendor, type `YES` to confirm, and watch it work:
   Pick an antivirus to force-remove:
 
    1) McAfee  —  Total Protection, LiveSafe, Security Scan, WebAdvisor, enterprise agent
-   2) Norton / NortonLifeLock  (coming soon)
-   3) Avast / AVG  (coming soon)
+   2) Norton / Symantec  —  Norton 360 / Security, NortonLifeLock, Symantec Endpoint Protection
+   3) Avast / AVG  —  Avast Antivirus / One and AVG (same engine)
+   4) CrowdStrike Falcon  —  Falcon sensor (EDR), needs the maintenance token from your console
+   5) SentinelOne  —  S1 agent (EDR), needs the anti-tamper passphrase from your console
 
    Q) Quit
 ```
 
-## How McAfee removal works
+## Supported vendors
 
-The proper way first, then by force:
+| Vendor | Type | How it's removed |
+| --- | --- | --- |
+| **McAfee** | Consumer AV | Official uninstaller → full force-removal |
+| **Norton / Symantec** | Consumer AV + SEP | Official uninstaller → full force-removal |
+| **Avast / AVG** | Consumer AV | Official uninstaller → full force-removal |
+| **CrowdStrike Falcon** | EDR (tamper-protected) | Token uninstall → leftover cleanup only |
+| **SentinelOne** | EDR (tamper-protected) | Passphrase unprotect + uninstall → leftover cleanup only |
 
-1. **Official uninstallers** — runs every McAfee uninstaller registered in the
+One parametrized engine (`Invoke-GenericAvRemoval`) drives every vendor; each is
+just a config entry in the `$script:Vendors` registry.
+
+### A note on the EDRs
+
+CrowdStrike and SentinelOne self-protect at the kernel level. You **cannot**
+brute-force-delete a running Falcon or S1 sensor — the driver blocks it, and
+trying can leave the machine unbootable. The only supported removal is the
+vendor uninstaller with a credential **you** pull from your own console:
+
+- **CrowdStrike** — a *maintenance token* (Falcon → Host setup & management →
+  Sensor update policies → uninstall token).
+- **SentinelOne** — the *anti-tamper passphrase* (S1 console → Sentinels → the
+  endpoint → Actions → Show Passphrase).
+
+The tool prompts for it, runs the supported uninstall, and then cleans up
+leftovers. If a core service is still present afterwards (wrong/missing
+credential, uninstall protection on), it **stops before the destructive stages**
+and tells you what's needed — it does not fight a still-protected agent.
+
+## How consumer-AV removal works
+
+The proper way first, then by force (McAfee shown; every consumer vendor runs
+the same stages against its own names):
+
+1. **Official uninstallers** — runs every vendor uninstaller registered in the
    registry (silently where possible). Doing this first keeps Windows Installer
-   state clean and lets McAfee unhook its own drivers / WFP filters.
-2. **Processes** — kills anything McAfee still running.
+   state clean and lets the vendor unhook its own drivers / WFP filters.
+2. **Processes** — kills anything from the vendor still running.
 3. **Services & kernel drivers** — stops, disables and deletes them; self-protected
    ones are marked for deletion at reboot.
-4. **Scheduled tasks** — unregisters McAfee tasks.
+4. **Scheduled tasks** — unregisters the vendor's tasks.
 5. **AppX packages** — removes installed and provisioned Store packages.
-6. **Known folders** — force-deletes McAfee folders under Program Files,
+6. **Known folders** — force-deletes the vendor's folders under Program Files,
    ProgramData and every user profile, escalating through `takeown` / `icacls`
    and finally queueing locked files for deletion at next reboot.
-7. **Registry & autoruns** — removes McAfee keys and Run entries.
-8. **Deep scan (optional)** — sweeps the whole system drive for anything named
-   `*mcafee*` that survived. Matches under program/system locations are deleted;
+7. **Registry & autoruns** — removes the vendor's keys and Run entries.
+8. **Deep scan (optional)** — sweeps the whole system drive for the vendor's
+   name(s) that survived. Matches under program/system locations are deleted;
    matches anywhere else (e.g. your own documents) are **listed for review,
    never auto-deleted**.
 
 A full transcript is written to `%TEMP%\AV-Removal-*.log` (path printed at the
 end). If anything is genuinely locked, it's queued for deletion on the next
-reboot. Whatever survives even that is listed at the end — finish it off with
-McAfee's official [MCPR](https://www.mcafee.com/support) tool.
+reboot. Whatever survives even that is listed at the end, along with the
+vendor-specific fallback tool (McAfee MCPR, Symantec CleanWipe, avastclear, …).
 
 ## Safety
 
@@ -78,8 +112,13 @@ what "aggressive" is allowed to touch:
 - **Deep scan is conservative** — outside known program locations it only
   reports; it never deletes your files.
 
+- **EDRs are not brute-forced** — for CrowdStrike / SentinelOne, if the agent is
+  still tamper-protected after the supported uninstall, the tool stops rather
+  than risk bricking the machine.
+
 > Review [`public/nuke.ps1`](public/nuke.ps1) before running it. It is not
-> affiliated with McAfee, Norton, Avast, or any vendor named here.
+> affiliated with McAfee, Norton, Symantec, Avast, AVG, CrowdStrike,
+> SentinelOne, or any vendor named here. Use it only on machines you administer.
 
 ## How it works (hosting)
 
@@ -92,12 +131,30 @@ what "aggressive" is allowed to touch:
 
 ## Adding a vendor
 
-Removal logic lives in `public/nuke.ps1`. To add an AV:
+One engine (`Invoke-GenericAvRemoval`) drives every vendor, so adding one is
+usually just data. Drop an object into the `$script:Vendors` registry in
+[`public/nuke.ps1`](public/nuke.ps1):
 
-1. Write an `Invoke-<Vendor>Removal` function using the shared forced-removal
-   primitives (`Remove-ItemForcefully`, the reparse-point helpers, etc.).
-2. Add an entry to the `$script:Vendors` registry with `Ready = $true` and an
-   `Action` scriptblock that calls it. The menu picks it up automatically.
+```powershell
+[pscustomobject]@{
+    Key = 'webroot'; Name = 'Webroot'; Ready = $true; Protected = $false
+    Blurb = 'Webroot SecureAnywhere'
+    FallbackNote = "Leftovers? Use Webroot's CleanUp tool."
+    Config = @{
+        DisplayName  = 'Webroot'
+        ProductMatch = 'webroot'                 # regex vs "DisplayName Publisher"
+        ServiceExact = '^(wrsvc|wrsa|wrkrn|wrbootdrv)$'  # names without the vendor word
+        FolderNames  = @('Webroot')
+        RegKeys      = @('HKLM:\SOFTWARE\WRData', 'HKLM:\SOFTWARE\WRCore')
+        AppxPatterns = @('*webroot*')            # optional
+        DeepFilters  = @('*webroot*')            # optional whole-drive sweep
+    }
+}
+```
+
+For a tamper-protected EDR, add `CoreServices = @(...)` (the engine stops if any
+survive the uninstall) and a `PreUninstall` scriptblock that runs the vendor's
+token/passphrase uninstall. The menu picks it up automatically.
 
 ## Deploy
 
