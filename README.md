@@ -9,9 +9,30 @@ uninstall plus leftover cleanup.
 Part of the [it2.sh](https://it2.sh) family of one-line tools.
 
 ```powershell
-# Windows — PowerShell (run as Administrator)
+# Windows — PowerShell (run as Administrator) — interactive menu
 irm nuke.it2.sh | iex
 ```
+
+Or jump straight to a target by putting it in the URL path — no menu:
+
+```powershell
+irm nuke.it2.sh/mcafee | iex     # just McAfee
+irm nuke.it2.sh/s1     | iex     # SentinelOne  (alias of /sentinelone)
+irm nuke.it2.sh/all    | iex     # every consumer AV in one pass
+```
+
+| Path | Runs |
+| --- | --- |
+| `/mcafee` | McAfee |
+| `/norton` · `/symantec` | Norton / Symantec |
+| `/avast` · `/avg` | Avast / AVG |
+| `/crowdstrike` · `/cs` · `/falcon` | CrowdStrike Falcon |
+| `/sentinelone` · `/s1` · `/sentinel` | SentinelOne |
+| `/all` | every **consumer** AV (McAfee, Norton, Avast) — EDRs are skipped since each needs a token/passphrase |
+
+The target is a fixed alias resolved by the Worker (never free text), so there's
+no injection surface. Self-elevation preserves the target — `irm nuke.it2.sh/s1`
+relaunches as `irm nuke.it2.sh/s1`.
 
 Not elevated? The tool detects it and offers to relaunch itself as Administrator.
 
@@ -133,6 +154,12 @@ what "aggressive" is allowed to touch:
 - It does **content negotiation** on the request:
   - Terminals (`curl` / `wget` / PowerShell user-agents) → the raw `nuke.ps1`.
   - Browsers (`Accept: text/html`) → a self-contained explainer page.
+- **Path routing:** the first path segment (`/s1`, `/mcafee`, `/all`, …) is
+  resolved through a fixed alias table to a canonical vendor key, and the Worker
+  prepends `$script:NukeTarget = '<key>'` to the served script so it runs that
+  target non-interactively. An unknown segment returns a `404` with the valid
+  list. The injected value only ever comes from the allow-list, so it can't be
+  used to smuggle PowerShell into the script.
 - The script is served from the bound `./public` assets directory — single
   source of truth, no build step.
 
@@ -175,6 +202,8 @@ The route and custom domain are configured in [`wrangler.toml`](wrangler.toml).
 
 | Path | Response |
 | --- | --- |
-| `/` | Raw `nuke.ps1` (terminal) or explainer page (browser) |
+| `/` | Raw `nuke.ps1` interactive menu (terminal) or explainer page (browser) |
+| `/<target>` | `nuke.ps1` with a direct target injected (`/mcafee`, `/s1`, `/all`, …) |
+| `/<unknown>` | `404` plain text with the valid target list |
 | `/health` | `200 OK` — health check |
 | `/favicon.ico` | `204 No Content` |

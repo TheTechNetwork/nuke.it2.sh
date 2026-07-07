@@ -17,7 +17,10 @@
 $ErrorActionPreference = 'Continue'
 
 # The one-liner used to (re)launch this tool — also used to self-elevate.
-$script:LaunchCommand = 'irm nuke.it2.sh | iex'
+# The Worker may inject $script:LaunchCommand (and $script:NukeTarget) ahead of
+# this script when a target is given in the URL path (e.g. nuke.it2.sh/s1), so
+# only set a default when nothing was injected.
+if (-not $script:LaunchCommand) { $script:LaunchCommand = 'irm nuke.it2.sh | iex' }
 
 # ===========================================================================
 #  Shared UI helpers
@@ -874,8 +877,46 @@ function Show-Menu {
     Write-Host ''
 }
 
+# Non-interactive entry: the Worker injects $script:NukeTarget from the URL path
+# (a canonical vendor Key, or 'all') so a target can be run in one shot, e.g.
+#   irm nuke.it2.sh/mcafee | iex     irm nuke.it2.sh/s1 | iex     irm nuke.it2.sh/all | iex
+function Invoke-DirectTarget {
+    param([Parameter(Mandatory = $true)][string]$Target)
+
+    Show-Banner
+    if ($Target -eq 'all') {
+        # 'all' runs every consumer AV automatically. EDRs are left out on
+        # purpose — they each need a token/passphrase, so run them by name.
+        $todo = @($script:Vendors | Where-Object { $_.Ready -and -not $_.Protected })
+        Write-Host "  Target : ALL consumer AV — $($todo.Name -join ', ')" -ForegroundColor White
+        $edrs = @($script:Vendors | Where-Object { $_.Ready -and $_.Protected })
+        if ($edrs.Count -gt 0) {
+            Write-Host "  Skipping EDRs ($($edrs.Name -join ', ')) — run each explicitly, e.g. irm nuke.it2.sh/s1 | iex" -ForegroundColor DarkGray
+        }
+        foreach ($v in $todo) {
+            Invoke-Removal -Vendor $v
+            Write-Host ''
+        }
+        Write-Host '  All consumer AV removals complete.' -ForegroundColor Green
+        return
+    }
+
+    $vendor = $script:Vendors | Where-Object { $_.Key -eq $Target } | Select-Object -First 1
+    if (-not $vendor) {
+        Write-Bad "Unknown target '$Target'. Valid: $(( $script:Vendors.Key ) -join ', '), all."
+        return
+    }
+    Invoke-Removal -Vendor $vendor
+}
+
 function Start-NukeTui {
     if (-not (Assert-Admin)) { return }
+
+    # Direct target from the URL path (nuke.it2.sh/<vendor>) — skip the menu.
+    if ($script:NukeTarget) {
+        Invoke-DirectTarget -Target $script:NukeTarget
+        return
+    }
 
     while ($true) {
         Show-Menu
