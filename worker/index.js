@@ -17,6 +17,30 @@ const TAGLINE = "Antivirus search & destroy — force-remove stubborn AV bloatwa
 const REPO = "https://github.com/TheTechNetwork/nuke.it2.sh";
 const RUN_CMD = "irm nuke.it2.sh | iex";
 
+// URL-path targets: nuke.it2.sh/<segment> runs that vendor straight away,
+// skipping the interactive menu. Each alias maps to a canonical vendor Key in
+// the script's $script:Vendors registry (or the literal 'all'). Because we only
+// ever inject a value from THIS fixed allow-list, there is no script-injection
+// surface (unlike a free-text path).
+const TARGETS = {
+  mcafee: "mcafee",
+  norton: "norton", symantec: "norton",
+  avast: "avast", avg: "avast",
+  crowdstrike: "crowdstrike", cs: "crowdstrike", falcon: "crowdstrike",
+  sentinelone: "sentinelone", s1: "sentinelone", sentinel: "sentinelone",
+  bitdefender: "bitdefender", bd: "bitdefender",
+  eset: "eset", nod32: "eset",
+  webroot: "webroot",
+  malwarebytes: "malwarebytes", mbam: "malwarebytes", mb: "malwarebytes",
+  kaspersky: "kaspersky", kav: "kaspersky",
+  avira: "avira",
+  trendmicro: "trendmicro", trend: "trendmicro", apexone: "trendmicro", officescan: "trendmicro",
+  sophos: "sophos",
+  cylance: "cylance", blackberry: "cylance",
+  carbonblack: "carbonblack", cb: "carbonblack", confer: "carbonblack",
+  all: "all",
+};
+
 function escapeHtml(str) {
   return str.replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -98,22 +122,44 @@ function renderHtml() {
 
     <article class="card">
       <h2>Run it</h2>
-      <span class="cmd-label">Windows — PowerShell (as Administrator)</span>
+      <span class="cmd-label">Windows — PowerShell (as Administrator) · interactive menu</span>
       <code data-copy="${escapeHtml(RUN_CMD)}">${escapeHtml(RUN_CMD)}<span class="copy-ic" aria-hidden="true"><svg class="ic-copy" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><svg class="ic-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></code>
-      <p class="muted" style="margin:.6rem 0 0;font-size:.9rem">Not elevated? The tool offers to relaunch itself as Administrator.</p>
+      <p class="muted" style="margin:.6rem 0 .3rem;font-size:.9rem">Or jump straight to a target — add it to the path:</p>
+      <span class="cmd-label">Direct target (skips the menu)</span>
+      <code data-copy="irm nuke.it2.sh/s1 | iex">irm nuke.it2.sh/s1 | iex<span class="copy-ic" aria-hidden="true"><svg class="ic-copy" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><svg class="ic-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></code>
+      <p class="muted" style="margin:.5rem 0 0;font-size:.88rem">
+        <code style="display:inline;padding:.05rem .3rem">/mcafee</code>
+        <code style="display:inline;padding:.05rem .3rem">/norton</code>
+        <code style="display:inline;padding:.05rem .3rem">/avast</code>
+        <code style="display:inline;padding:.05rem .3rem">/cs</code> (crowdstrike) ·
+        <code style="display:inline;padding:.05rem .3rem">/s1</code> (sentinelone) ·
+        <code style="display:inline;padding:.05rem .3rem">/all</code> (every consumer AV)
+      </p>
+      <p class="muted" style="margin:.6rem 0 0;font-size:.9rem">Not elevated? The tool offers to relaunch itself as Administrator — preserving the target.</p>
     </article>
 
     <article class="card">
       <h2>What it removes</h2>
-      <p style="margin:0 0 .4rem">Pick a vendor from the menu. Currently:</p>
+      <p style="margin:0 0 .4rem">Pick a vendor from the menu. <strong>Consumer AV</strong> (full force-removal):</p>
       <ul>
-        <li><strong>McAfee</strong> — Total Protection, LiveSafe, Security Scan, WebAdvisor, the enterprise agent, and their leftovers.</li>
-        <li class="muted">Norton, Avast / AVG — coming soon.</li>
+        <li><strong>McAfee</strong> · <strong>Norton / Symantec</strong> · <strong>Avast / AVG</strong> · <strong>Bitdefender</strong> · <strong>ESET</strong> · <strong>Webroot</strong> · <strong>Malwarebytes</strong> · <strong>Kaspersky</strong> · <strong>Avira</strong></li>
+      </ul>
+      <p style="margin:.6rem 0 .4rem"><strong>EDR</strong> <span class="muted">(tamper-protected — supported uninstall + a credential from your console)</span>:</p>
+      <ul>
+        <li><strong>CrowdStrike Falcon</strong> — maintenance token · <strong>SentinelOne</strong> — anti-tamper passphrase · <strong>Sophos</strong> — tamper-off / SophosZap · <strong>Trend Micro</strong> Apex One — unload password · <strong>BlackBerry / Cylance</strong> — uninstall password · <strong>VMware Carbon Black</strong> — uninstall code</li>
       </ul>
       <p class="muted" style="margin:.8rem 0 0;font-size:.9rem">
-        For the selected vendor it runs the official uninstaller first, then force-removes
+        For consumer AV it runs the official uninstaller first, then force-removes
         processes, services, kernel drivers, scheduled tasks, AppX packages, folders,
         registry keys and autoruns — with an optional whole-drive leftover sweep.
+        For tamper-protected EDRs it runs the supported token/passphrase uninstall and
+        cleans up leftovers; it will <strong>not</strong> brute-force a still-protected
+        agent (that risks an unbootable machine).
+      </p>
+      <p class="muted" style="margin:.6rem 0 0;font-size:.9rem">
+        Where a vendor publishes a public cleaner (McAfee MCPR, avastclear) the tool
+        offers to download and run it. Support-gated cleaners (Symantec CleanWipe,
+        CrowdStrike / SentinelOne) you supply yourself.
       </p>
     </article>
 
@@ -181,7 +227,11 @@ export default {
       return new Response(null, { status: 204 });
     }
 
-    // Browsers get the styled explainer page.
+    // First path segment (if any) selects a direct target.
+    const segment = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "").split("/")[0].toLowerCase();
+    const target = segment ? TARGETS[segment] : null;
+
+    // Browsers get the styled explainer page (path is ignored for HTML).
     if (wantsHtml(request)) {
       return new Response(renderHtml(), {
         status: 200,
@@ -193,6 +243,15 @@ export default {
       });
     }
 
+    // Unknown path segment → a helpful plain-text error for terminals.
+    if (segment && !target) {
+      const valid = Object.keys(TARGETS).join(", ");
+      return new Response(
+        `Unknown target: "${segment}".\nValid targets: ${valid}\nOr run the interactive menu: irm nuke.it2.sh | iex\n`,
+        { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      );
+    }
+
     // Terminals get the raw PowerShell TUI, served from the assets dir.
     const assetResponse = await env.ASSETS.fetch(
       new Request("https://assets.local/nuke.ps1")
@@ -200,7 +259,16 @@ export default {
     if (!assetResponse.ok) {
       return new Response("Failed to load nuke.ps1", { status: 502 });
     }
-    const body = await assetResponse.text();
+    let body = await assetResponse.text();
+
+    // Direct target: inject the canonical Key + a matching relaunch one-liner
+    // (so self-elevation re-runs the same path) ahead of the script.
+    if (target) {
+      const header =
+        `$script:NukeTarget = '${target}'\n` +
+        `$script:LaunchCommand = 'irm nuke.it2.sh/${segment} | iex'\n`;
+      body = header + body;
+    }
 
     return new Response(body, {
       status: 200,
@@ -209,6 +277,7 @@ export default {
         "Cache-Control": "public, max-age=3600",
         "X-Source": "nuke.it2.sh",
         "X-Script": "nuke.ps1",
+        "X-Target": target || "(menu)",
       },
     });
   },
