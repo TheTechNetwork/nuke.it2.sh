@@ -28,6 +28,16 @@ const TARGETS = {
   avast: "avast", avg: "avast",
   crowdstrike: "crowdstrike", cs: "crowdstrike", falcon: "crowdstrike",
   sentinelone: "sentinelone", s1: "sentinelone", sentinel: "sentinelone",
+  bitdefender: "bitdefender", bd: "bitdefender",
+  eset: "eset", nod32: "eset",
+  webroot: "webroot",
+  malwarebytes: "malwarebytes", mbam: "malwarebytes", mb: "malwarebytes",
+  kaspersky: "kaspersky", kav: "kaspersky",
+  avira: "avira",
+  trendmicro: "trendmicro", trend: "trendmicro", apexone: "trendmicro", officescan: "trendmicro",
+  sophos: "sophos",
+  cylance: "cylance", blackberry: "cylance",
+  carbonblack: "carbonblack", cb: "carbonblack", confer: "carbonblack",
   all: "all",
 };
 
@@ -130,13 +140,13 @@ function renderHtml() {
 
     <article class="card">
       <h2>What it removes</h2>
-      <p style="margin:0 0 .4rem">Pick a vendor from the menu:</p>
+      <p style="margin:0 0 .4rem">Pick a vendor from the menu. <strong>Consumer AV</strong> (full force-removal):</p>
       <ul>
-        <li><strong>McAfee</strong> — Total Protection, LiveSafe, Security Scan, WebAdvisor, enterprise agent.</li>
-        <li><strong>Norton / Symantec</strong> — Norton 360 / Security, NortonLifeLock, Symantec Endpoint Protection.</li>
-        <li><strong>Avast / AVG</strong> — Avast Antivirus / One and AVG (same engine).</li>
-        <li><strong>CrowdStrike Falcon</strong> <span class="muted">(EDR)</span> — needs the maintenance token from your Falcon console.</li>
-        <li><strong>SentinelOne</strong> <span class="muted">(EDR)</span> — needs the anti-tamper passphrase from your S1 console.</li>
+        <li><strong>McAfee</strong> · <strong>Norton / Symantec</strong> · <strong>Avast / AVG</strong> · <strong>Bitdefender</strong> · <strong>ESET</strong> · <strong>Webroot</strong> · <strong>Malwarebytes</strong> · <strong>Kaspersky</strong> · <strong>Avira</strong></li>
+      </ul>
+      <p style="margin:.6rem 0 .4rem"><strong>EDR</strong> <span class="muted">(tamper-protected — supported uninstall + a credential from your console)</span>:</p>
+      <ul>
+        <li><strong>CrowdStrike Falcon</strong> — maintenance token · <strong>SentinelOne</strong> — anti-tamper passphrase · <strong>Sophos</strong> — tamper-off / SophosZap · <strong>Trend Micro</strong> Apex One — unload password · <strong>BlackBerry / Cylance</strong> — uninstall password · <strong>VMware Carbon Black</strong> — uninstall code</li>
       </ul>
       <p class="muted" style="margin:.8rem 0 0;font-size:.9rem">
         For consumer AV it runs the official uninstaller first, then force-removes

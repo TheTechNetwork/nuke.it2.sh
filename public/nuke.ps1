@@ -676,6 +676,48 @@ $script:PreUninstall_SentinelOne = {
     }
 }
 
+# Shared helper for EDRs whose uninstall takes a single MSI property (a password
+# or company/uninstall code) the admin gets from the vendor console.
+function Invoke-TokenMsiUninstall {
+    param(
+        [object[]]$Products,
+        [Parameter(Mandatory = $true)][string]$Prompt,
+        [Parameter(Mandatory = $true)][string]$Property
+    )
+    $guids = @($Products | Where-Object { $_.PSChildName -match '^\{[0-9A-Fa-f-]+\}$' } |
+        Select-Object -ExpandProperty PSChildName)
+    if ($guids.Count -eq 0) { Write-Bad 'No matching MSI product found to uninstall.'; return }
+    $val = Read-Host $Prompt
+    foreach ($g in $guids) {
+        $a = "/x $g /qn /norestart"
+        if ($val) { $a += " $Property=$val" }
+        Write-Host "  Running uninstall for $g" -ForegroundColor Gray
+        $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList $a -Wait -PassThru -WindowStyle Hidden
+        if ($p.ExitCode -in 0, 1605, 3010) {
+            if ($p.ExitCode -eq 3010) { $script:RebootNeeded = $true }
+            Write-Ok "Uninstall returned $($p.ExitCode)"
+        } else {
+            Write-Bad "Uninstall returned $($p.ExitCode) (wrong or missing $Property?)"
+        }
+    }
+}
+
+# BlackBerry/Cylance PROTECT: uninstall password (device policy) via MSI property.
+$script:PreUninstall_Cylance = {
+    param($products)
+    Invoke-TokenMsiUninstall -Products $products `
+        -Prompt '  Cylance uninstall password (blank if the policy has none)' `
+        -Property 'UNINSTALLPASSWORD'
+}
+
+# VMware Carbon Black Cloud sensor: company/uninstall code from the CB console.
+$script:PreUninstall_CarbonBlack = {
+    param($products)
+    Invoke-TokenMsiUninstall -Products $products `
+        -Prompt '  Carbon Black uninstall/company code (blank if none)' `
+        -Property 'UNINSTALL_CODE'
+}
+
 # ===========================================================================
 #  Vendor registry — single source of truth for the menu.
 #
@@ -775,6 +817,160 @@ $script:Vendors = @(
                              'HKLM:\SOFTWARE\WOW6432Node\SentinelOne')
             DeepFilters   = @('*sentinel*')
             PreUninstall  = $script:PreUninstall_SentinelOne
+        }
+    }
+
+    # ---- more consumer AV (full force-removal) ----------------------------
+    [pscustomobject]@{
+        Key = 'bitdefender'; Name = 'Bitdefender'; Ready = $true; Protected = $false
+        Blurb = 'Bitdefender consumer + GravityZone Endpoint (BEST) agent'
+        FallbackNote = "Leftovers? Bitdefender publishes a per-product Uninstall Tool at bitdefender.com/consumer/support/answer/2681/."
+        Config = @{
+            DisplayName  = 'Bitdefender'
+            ProductMatch = 'bitdefender'
+            ServiceExact = '^(vsserv|updatesrv|bdredline\w*|epsecurityservice|epupdateservice|epprotectedservice|epintegrationservice|bdauxsrv)$'
+            FolderNames  = @('Bitdefender', 'Bitdefender Agent')
+            RegKeys      = @('HKLM:\SOFTWARE\Bitdefender', 'HKLM:\SOFTWARE\WOW6432Node\Bitdefender')
+            DeepFilters  = @('*bitdefender*')
+        }
+    }
+    [pscustomobject]@{
+        Key = 'eset'; Name = 'ESET'; Ready = $true; Protected = $false
+        Blurb = 'ESET NOD32 / Internet Security / Endpoint, ESET Management Agent'
+        FallbackNote = "Stubborn? Boot into Safe Mode and run ESETUninstaller.exe (ESET KB SOLN2289)."
+        Config = @{
+            DisplayName  = 'ESET'
+            ProductMatch = 'eset'
+            ServiceExact = '^(ekrn|egui|eraagentsvc|eguiproxy)$'
+            FolderNames  = @('ESET')
+            RegKeys      = @('HKLM:\SOFTWARE\ESET', 'HKLM:\SOFTWARE\WOW6432Node\ESET')
+            DeepFilters  = @('*eset*')
+        }
+    }
+    [pscustomobject]@{
+        Key = 'webroot'; Name = 'Webroot'; Ready = $true; Protected = $false
+        Blurb = 'Webroot SecureAnywhere'
+        FallbackNote = "Orphaned Webroot? Support provides a CleanUp / WRUpgradeTool utility."
+        Config = @{
+            DisplayName  = 'Webroot'
+            ProductMatch = 'webroot'
+            ServiceExact = '^(wrsvc|wrskyclient|wrcoreservice)$'
+            FolderNames  = @('Webroot', 'WRData', 'WRCore', 'WRMIDData')
+            RegKeys      = @('HKLM:\SOFTWARE\WRData', 'HKLM:\SOFTWARE\WRCore', 'HKLM:\SOFTWARE\WRMIDData',
+                             'HKLM:\SOFTWARE\WOW6432Node\WRData', 'HKLM:\SOFTWARE\WOW6432Node\WRCore')
+            DeepFilters  = @('*webroot*')
+        }
+    }
+    [pscustomobject]@{
+        Key = 'malwarebytes'; Name = 'Malwarebytes'; Ready = $true; Protected = $false
+        Blurb = 'Malwarebytes consumer + Endpoint (Nebula/OneView) agent'
+        FallbackNote = "The Malwarebytes Support Tool (mb-clean) removes stubborn installs."
+        Config = @{
+            DisplayName  = 'Malwarebytes'
+            ProductMatch = 'malwarebytes'
+            ServiceExact = '^(mbamservice|mbendpointagent|mbcloudea|mbamscheduler)$'
+            FolderNames  = @('Malwarebytes', 'Malwarebytes Endpoint Agent')
+            RegKeys      = @('HKLM:\SOFTWARE\Malwarebytes', 'HKLM:\SOFTWARE\WOW6432Node\Malwarebytes')
+            DeepFilters  = @('*malwarebytes*')
+            Cleaners     = @(
+                @{ Name = 'mb-support-tool.exe'
+                   Url  = 'https://downloads.malwarebytes.com/file/mbst'
+                   Args = ''
+                   Note = 'Malwarebytes Support Tool — use its Advanced tab -> Clean to fully remove.' }
+            )
+        }
+    }
+    [pscustomobject]@{
+        Key = 'kaspersky'; Name = 'Kaspersky'; Ready = $true; Protected = $false
+        Blurb = 'Kaspersky consumer, Endpoint Security, Network Agent'
+        FallbackNote = "kavremover is the official removal tool (offered above)."
+        Config = @{
+            DisplayName  = 'Kaspersky'
+            ProductMatch = 'kaspersky'
+            ServiceExact = '^(avp\w*|klnagent|kavfs\w*|ksde\w*|klbackupflt)$'
+            FolderNames  = @('Kaspersky Lab', 'Kaspersky Lab Setup Files')
+            RegKeys      = @('HKLM:\SOFTWARE\KasperskyLab', 'HKLM:\SOFTWARE\WOW6432Node\KasperskyLab')
+            DeepFilters  = @('*kaspersky*')
+            Cleaners     = @(
+                @{ Name = 'kavremover.exe'
+                   Url  = 'https://media.kaspersky.com/utilities/ConsumerUtilities/kavremover.exe'
+                   Args = ''
+                   Note = 'kavremover GUI — pick the product and remove. Password-protected installs need the KAV password first.' }
+            )
+        }
+    }
+    [pscustomobject]@{
+        Key = 'avira'; Name = 'Avira'; Ready = $true; Protected = $false
+        Blurb = 'Avira Free / Antivirus / Prime'
+        FallbackNote = "Leftovers? Avira's RegistryCleaner utility clears them."
+        Config = @{
+            DisplayName  = 'Avira'
+            ProductMatch = 'avira'
+            ServiceExact = '^(antivirservice|antivirschedulerservice|avguard|avgnt|avira\.\w+|avirawebcat|aviraphantomvpn)$'
+            FolderNames  = @('Avira')
+            RegKeys      = @('HKLM:\SOFTWARE\Avira', 'HKLM:\SOFTWARE\WOW6432Node\Avira')
+            DeepFilters  = @('*avira*')
+        }
+    }
+
+    # ---- more EDR / tamper-protected -------------------------------------
+    [pscustomobject]@{
+        Key = 'trendmicro'; Name = 'Trend Micro'; Ready = $true; Protected = $true
+        Blurb = 'Trend Micro consumer + Apex One / OfficeScan (business needs the unload password)'
+        FallbackNote = "Business agents self-protect: set the Apex One/OfficeScan uninstall password (or unload the agent) first. Trend support has the SIC removal tool for orphans."
+        Config = @{
+            DisplayName   = 'Trend Micro'
+            ProductMatch  = 'trend micro'
+            ServiceExact  = '^(ntrtscan|tmlisten|tmbmserver|amsp|tmccsf|tmusa|tmwscsvc|tmactmon\w*|coreserviceshell|coreframeworkhost)$'
+            CoreServices  = @('ntrtscan', 'TmListen', 'Amsp')
+            FolderNames   = @('Trend Micro')
+            RegKeys       = @('HKLM:\SOFTWARE\TrendMicro', 'HKLM:\SOFTWARE\WOW6432Node\TrendMicro')
+            DeepFilters   = @('*trend micro*', '*trendmicro*')
+        }
+    }
+    [pscustomobject]@{
+        Key = 'sophos'; Name = 'Sophos'; Ready = $true; Protected = $true
+        Blurb = 'Sophos Endpoint / Intercept X (tamper-protected)'
+        FallbackNote = "Turn off Tamper Protection in Sophos Central (or with the local tamper password) before removal. Support's SophosZap forcibly removes orphans."
+        Config = @{
+            DisplayName   = 'Sophos'
+            ProductMatch  = 'sophos'
+            ServiceExact  = '^(savservice|sntpservice|swi_service|swi_update\w*|sophosfilescanner|sophosmcsagent|sophosmcsclient|sophoshealthservice|sedservice|hmpalertsvc|sophosdiagnosticsservice|sophosnetfilter)$'
+            CoreServices  = @('Sophos Endpoint Defense Service', 'SAVService', 'SntpService')
+            FolderNames   = @('Sophos')
+            RegKeys       = @('HKLM:\SOFTWARE\Sophos', 'HKLM:\SOFTWARE\WOW6432Node\Sophos')
+            DeepFilters   = @('*sophos*')
+        }
+    }
+    [pscustomobject]@{
+        Key = 'cylance'; Name = 'BlackBerry / Cylance'; Ready = $true; Protected = $true
+        Blurb = 'CylancePROTECT / BlackBerry Protect (uninstall password)'
+        FallbackNote = "Set/obtain the Cylance uninstall password from the console policy; the tool passes it as UNINSTALLPASSWORD."
+        Config = @{
+            DisplayName   = 'BlackBerry / Cylance'
+            ProductMatch  = 'cylance|blackberry protect'
+            ServiceExact  = '^(cylancesvc|cylanceui|cyprotectdrv\w*|cydevflt\w*)$'
+            CoreServices  = @('CylanceSvc')
+            FolderNames   = @('Cylance')
+            RegKeys       = @('HKLM:\SOFTWARE\Cylance', 'HKLM:\SOFTWARE\WOW6432Node\Cylance')
+            DeepFilters   = @('*cylance*')
+            PreUninstall  = $script:PreUninstall_Cylance
+        }
+    }
+    [pscustomobject]@{
+        Key = 'carbonblack'; Name = 'VMware Carbon Black'; Ready = $true; Protected = $true
+        Blurb = 'Carbon Black Cloud / Cb Defense sensor (uninstall code)'
+        FallbackNote = "Carbon Black needs the company/uninstall code from the CB console; the tool passes it as UNINSTALL_CODE."
+        Config = @{
+            DisplayName   = 'VMware Carbon Black'
+            ProductMatch  = 'carbon black|cb defense|confer'
+            ServiceExact  = '^(carbonblack|cbdefense|cbcomms|cbstream\w*|cbk7\w*|repmgr)$'
+            CoreServices  = @('CarbonBlack', 'CbDefense')
+            FolderNames   = @('CarbonBlack', 'Confer')
+            RegKeys       = @('HKLM:\SOFTWARE\CarbonBlack', 'HKLM:\SOFTWARE\Confer',
+                             'HKLM:\SOFTWARE\WOW6432Node\CarbonBlack')
+            DeepFilters   = @('*carbonblack*', '*confer*')
+            PreUninstall  = $script:PreUninstall_CarbonBlack
         }
     }
 )

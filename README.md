@@ -28,7 +28,7 @@ irm nuke.it2.sh/all    | iex     # every consumer AV in one pass
 | `/avast` · `/avg` | Avast / AVG |
 | `/crowdstrike` · `/cs` · `/falcon` | CrowdStrike Falcon |
 | `/sentinelone` · `/s1` · `/sentinel` | SentinelOne |
-| `/all` | every **consumer** AV (McAfee, Norton, Avast) — EDRs are skipped since each needs a token/passphrase |
+| `/all` | every **consumer** AV (McAfee, Norton, Avast, Bitdefender, ESET, Webroot, Malwarebytes, Kaspersky, Avira) — EDRs are skipped since each needs a token/passphrase |
 
 The target is a fixed alias resolved by the Worker (never free text), so there's
 no injection surface. Self-elevation preserves the target — `irm nuke.it2.sh/s1`
@@ -62,16 +62,36 @@ A menu. You pick a vendor, type `YES` to confirm, and watch it work:
 
 ## Supported vendors
 
-| Vendor | Type | How it's removed |
+**Consumer AV** — official uninstaller → full force-removal:
+
+| Vendor | Path | Public cleaner offered |
 | --- | --- | --- |
-| **McAfee** | Consumer AV | Official uninstaller → full force-removal |
-| **Norton / Symantec** | Consumer AV + SEP | Official uninstaller → full force-removal |
-| **Avast / AVG** | Consumer AV | Official uninstaller → full force-removal |
-| **CrowdStrike Falcon** | EDR (tamper-protected) | Token uninstall → leftover cleanup only |
-| **SentinelOne** | EDR (tamper-protected) | Passphrase unprotect + uninstall → leftover cleanup only |
+| **McAfee** | `/mcafee` | MCPR |
+| **Norton / Symantec** | `/norton` `/symantec` | — |
+| **Avast / AVG** | `/avast` `/avg` | avastclear |
+| **Bitdefender** | `/bitdefender` `/bd` | — |
+| **ESET** | `/eset` `/nod32` | — |
+| **Webroot** | `/webroot` | — |
+| **Malwarebytes** | `/malwarebytes` `/mbam` `/mb` | Support Tool (mb-clean) |
+| **Kaspersky** | `/kaspersky` `/kav` | kavremover |
+| **Avira** | `/avira` | — |
+
+**EDR** — tamper-protected; supported uninstall with a credential from *your*
+console, then leftover cleanup (never brute-forced):
+
+| Vendor | Path | Credential |
+| --- | --- | --- |
+| **CrowdStrike Falcon** | `/crowdstrike` `/cs` `/falcon` | maintenance token |
+| **SentinelOne** | `/sentinelone` `/s1` | anti-tamper passphrase |
+| **Sophos** | `/sophos` | tamper-off in Central / SophosZap |
+| **Trend Micro** (Apex One) | `/trendmicro` `/trend` | unload/uninstall password |
+| **BlackBerry / Cylance** | `/cylance` `/blackberry` | uninstall password |
+| **VMware Carbon Black** | `/carbonblack` `/cb` | uninstall/company code |
 
 One parametrized engine (`Invoke-GenericAvRemoval`) drives every vendor; each is
-just a config entry in the `$script:Vendors` registry.
+just a config entry in the `$script:Vendors` registry. Service/driver name lists
+are best-effort and vary by version — the engine also matches each vendor's name
+against the service's binary path, so it catches renamed services too.
 
 ### A note on the EDRs
 
