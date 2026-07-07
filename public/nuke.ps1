@@ -238,6 +238,44 @@ function Remove-ItemForcefully {
 #      maintenance token / passphrase from the vendor console.
 # ===========================================================================
 
+function Invoke-VendorCleaner {
+    # Download and run a vendor's official cleaner/removal tool. Best-effort:
+    # URLs and silent-switch support vary by vendor and change over time, so a
+    # dead link or a GUI-only tool degrades gracefully instead of aborting.
+    param([Parameter(Mandatory = $true)][hashtable]$Cleaner)
+
+    $dest = Join-Path $env:TEMP $Cleaner.Name
+    Write-Host "  Downloading $($Cleaner.Name)..." -ForegroundColor Gray
+    try {
+        # Older Windows defaults to TLS 1.0; force 1.2 so the download works.
+        try { [Net.ServicePointManager]::SecurityProtocol =
+                [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+        Invoke-WebRequest -Uri $Cleaner.Url -OutFile $dest -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Bad "Download failed for $($Cleaner.Name) (URL may have moved): $($_.Exception.Message)"
+        return
+    }
+    if (-not (Test-Path -LiteralPath $dest) -or (Get-Item -LiteralPath $dest).Length -lt 10240) {
+        Write-Bad "$($Cleaner.Name) did not download correctly — skipping."
+        return
+    }
+    if ($Cleaner.Note) { Write-Bad $Cleaner.Note }
+    Write-Host ("  Launching $($Cleaner.Name) $($Cleaner.Args)").TrimEnd() -ForegroundColor Gray
+    try {
+        $sp = @{ FilePath = $dest; PassThru = $true }
+        if ($Cleaner.Args) { $sp['ArgumentList'] = $Cleaner.Args }
+        $p = Start-Process @sp
+        if (-not $p.WaitForExit(1800000)) {          # 30 min ceiling
+            Write-Bad "$($Cleaner.Name) is still running — leaving it to finish on its own."
+        } else {
+            if ($p.ExitCode -in 3010, 1641) { $script:RebootNeeded = $true }   # reboot-required codes
+            Write-Ok "$($Cleaner.Name) exited (code $($p.ExitCode))."
+        }
+    } catch {
+        Write-Bad "Could not run $($Cleaner.Name): $($_.Exception.Message)"
+    }
+}
+
 function Invoke-GenericAvRemoval {
     param(
         [Parameter(Mandatory = $true)][string]$DisplayName,
@@ -251,6 +289,7 @@ function Invoke-GenericAvRemoval {
         [string[]]$DeepFilters = @(),                          # wildcard(s) for the deep scan (e.g. '*norton*','*symantec*')
         [string[]]$CoreServices = @(),                         # tamper-protected core services (empty => not protected)
         [scriptblock]$PreUninstall = $null,
+        [hashtable[]]$Cleaners = @(),                          # optional public cleaner tools (Name/Url/Args/Note)
         [switch]$DeepScan,
         [switch]$SkipUninstallers
     )
@@ -319,6 +358,18 @@ function Invoke-GenericAvRemoval {
                 Write-Bad "Could not run uninstaller for $($p.DisplayName): $($_.Exception.Message)"
             }
             Start-Sleep -Seconds 2   # let msiexec settle between products
+        }
+    }
+
+    # ---- 1b) official vendor cleaner tool (opt-in download) ---------------
+    # Most consumer vendors publish a dedicated removal utility. Offer to pull
+    # and run it — it often clears leftovers the registered uninstaller leaves.
+    if ($Cleaners.Count -gt 0) {
+        $names = ($Cleaners | ForEach-Object { $_.Name }) -join ', '
+        $ans = Read-Host "  Download & run the official $DisplayName cleaner ($names)? [y/N]"
+        if ($ans -match '^(y|yes)$') {
+            Write-Step "Running official $DisplayName cleaner tool"
+            foreach ($cl in $Cleaners) { Invoke-VendorCleaner -Cleaner $cl }
         }
     }
 
@@ -645,6 +696,12 @@ $script:Vendors = @(
                              'HKCU:\SOFTWARE\McAfee')
             AppxPatterns = @('*mcafee*')
             DeepFilters  = @('*mcafee*')
+            Cleaners     = @(
+                @{ Name = 'MCPR.exe'
+                   Url  = 'https://download.mcafee.com/molbin/iss-loc/SupportTools/MCPR/MCPR.exe'
+                   Args = ''
+                   Note = 'MCPR is an interactive GUI — click through it; it may prompt to reboot.' }
+            )
         }
     }
     [pscustomobject]@{
@@ -678,6 +735,12 @@ $script:Vendors = @(
                              'HKCU:\SOFTWARE\Avast Software', 'HKCU:\SOFTWARE\AVG')
             AppxPatterns = @('*avast*', '*avg*')
             DeepFilters  = @('*avast*', '*avg*')
+            Cleaners     = @(
+                @{ Name = 'avastclear.exe'
+                   Url  = 'https://files.avast.com/iavs9x/avastclear.exe'
+                   Args = ''
+                   Note = 'avastclear works best in Safe Mode — it can offer to schedule itself there. (Covers Avast; for AVG use aswclear from avg.com/utilities.)' }
+            )
         }
     }
     [pscustomobject]@{

@@ -91,6 +91,13 @@ the same stages against its own names):
    matches anywhere else (e.g. your own documents) are **listed for review,
    never auto-deleted**.
 
+Between steps 1 and 2, if the vendor publishes a **public cleaner tool**, the
+tool offers to download and run it (opt-in). Wired today: **McAfee MCPR** and
+**avastclear** (both verified live). Vendors whose cleaners sit behind a
+support/partner portal — Symantec CleanWipe, CrowdStrike `CsUninstallTool`,
+SentinelOne's cleaner — are intentionally *not* auto-downloaded; grab those from
+your portal and run them yourself.
+
 A full transcript is written to `%TEMP%\AV-Removal-*.log` (path printed at the
 end). If anything is genuinely locked, it's queued for deletion on the next
 reboot. Whatever survives even that is listed at the end, along with the

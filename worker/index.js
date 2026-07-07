@@ -121,6 +121,11 @@ function renderHtml() {
         cleans up leftovers; it will <strong>not</strong> brute-force a still-protected
         agent (that risks an unbootable machine).
       </p>
+      <p class="muted" style="margin:.6rem 0 0;font-size:.9rem">
+        Where a vendor publishes a public cleaner (McAfee MCPR, avastclear) the tool
+        offers to download and run it. Support-gated cleaners (Symantec CleanWipe,
+        CrowdStrike / SentinelOne) you supply yourself.
+      </p>
     </article>
 
     <article class="card">
